@@ -88,8 +88,8 @@
         public void PrintData() {
             Console.WriteLine($"Block [#{this.Address}]");
 
-            foreach (var record in this.Records) {
-                Console.WriteLine($"{record.GetInfo()}");
+            for (int i = 0; i < this.ValidCount; i++) {
+                Console.WriteLine($"{this.Records[i].GetInfo()}");
             }
         }
     }

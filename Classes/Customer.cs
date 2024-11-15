@@ -94,10 +94,10 @@ namespace ServiceConsole.Classes {
         }
 
         public override string GetInfo() {
-            string result = $"Customer - {this.Name} {this.Surname}:";
+            string result = $"  Customer - {this.Name} {this.Surname}:";
 
             foreach (var service in this.Services) {
-                result += $"\n  {service.GetInfo()}";
+                result += $"\n    {service.GetInfo()}";
             }
 
             return result;

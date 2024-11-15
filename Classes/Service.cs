@@ -75,7 +75,7 @@ namespace ServiceConsole.Classes {
         }
 
         public override string GetInfo() {
-            return $"Service - Date: {this.ConvertToDate(this.Date)}, Cost: {this.Cost}, Desc: {this.Description}";
+            return $"Service - Date: {this.ConvertToDate(this.Date)}, Cost: {this.Cost.ToString().Replace(',','.')}, Desc: {this.Description}";
         }
 
         private string ConvertToDate(string date) {

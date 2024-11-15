@@ -11,11 +11,13 @@ namespace ServiceConsole {
 
             tester.TestFind(1000);
 
-            tester.TestDelete(997);
+            tester.TestDelete(990);
 
             tester.TestDoublyLinkedListStructure();
 
             tester.TestPrint();
+
+            tester.TestSeek();
         }
     }
 }

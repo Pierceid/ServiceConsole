@@ -74,7 +74,7 @@
 
                 if (blockToDelete.Records.Count == 0) continue;
 
-                int recordIndex = random.Next(blockToDelete.Records.Count);
+                int recordIndex = random.Next(blockToDelete.ValidCount);
                 Customer customerToDelete = blockToDelete.Records[recordIndex];
 
                 int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, customerToDelete);
@@ -107,6 +107,12 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             this.heapFile.PrintFile();
+        }
+
+        public void TestSeek() {
+            Console.WriteLine("------------------------------------------------------------------------------------");
+
+            Console.WriteLine($"Seek (address of the end of file): {this.heapFile.Seek()}");
         }
     }
 }

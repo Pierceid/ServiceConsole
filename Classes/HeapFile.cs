@@ -88,14 +88,16 @@
                 if (block == null) break;
 
                 if (block.Address == blockAddress) {
-                    var record = block.Records.Find(r => r.EqualsByID(recordToDelete));
+                    for (int i = 0; i < block.ValidCount; i++) {
+                        var record = block.Records[i];
 
-                    if (record == null) break;
-
-                    block.Records.Remove(record);
-                    block.Records.Add(record);
-
-                    block.ValidCount--;
+                        if (record.EqualsByID(recordToDelete)) {
+                            block.Records.Remove(record);
+                            block.Records.Add(record);
+                            block.ValidCount--;
+                            break;
+                        }
+                    }
 
                     // If the block is empty, handle removal and links
                     if (block.ValidCount == 0) {
