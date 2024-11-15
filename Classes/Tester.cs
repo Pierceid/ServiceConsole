@@ -37,8 +37,7 @@
                 Console.WriteLine($"Inserted Customer {customer.Name} {customer.Surname} at address {address}");
 
                 if (address == -1) {
-                    Console.WriteLine("Test failed: Customer insertion returned an invalid address.");
-                    throw new NullReferenceException();
+                    throw new NullReferenceException("Failed to insert record.");
                 }
 
                 customers.Add(customer);
@@ -59,8 +58,7 @@
                 if (foundAddress != -1) {
                     Console.WriteLine($"Customer found at address: {foundAddress}");
                 } else {
-                    Console.WriteLine("Customer not found.");
-                    throw new NullReferenceException();
+                    throw new NullReferenceException("Failed to find record.");
                 }
             }
         }
@@ -69,20 +67,30 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             for (int i = 0; i < recordsCount; i++) {
-                RefreshLists();
+                if (this.heapFile.Blocks.Count == 0) break;
 
                 int blockIndex = random.Next(this.heapFile.Blocks.Count);
                 Block<Customer> blockToDelete = this.heapFile.Blocks[blockIndex];
-                int recordIndex = random.Next(blockToDelete.Records.Count);
-                IByteData recordData = blockToDelete.Records[recordIndex];
 
-                int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, recordData);
+                if (blockToDelete.Records.Count == 0) continue;
+
+                int recordIndex = random.Next(blockToDelete.Records.Count);
+                Customer customerToDelete = blockToDelete.Records[recordIndex];
+
+                int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, customerToDelete);
 
                 if (deletedAddress != -1) {
-                    Console.WriteLine($"Block {deletedAddress}, Record {recordIndex} was deleted successfully.");
+                    Console.WriteLine($"Customer {customerToDelete.Name} {customerToDelete.Surname} deleted successfully from address {deletedAddress}.");
+
+                    customers.Remove(customerToDelete);
+                    customerIDs.Remove(customerToDelete.Id);
+
+                    foreach (var service in customerToDelete.Services) {
+                        services.Remove(service);
+                        serviceIDs.Remove(service.Id);
+                    }
                 } else {
-                    Console.WriteLine("Failed to delete customer.");
-                    throw new NullReferenceException();
+                    throw new NullReferenceException("Failed to delete record.");
                 }
             }
         }
@@ -91,7 +99,7 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             foreach (var block in this.heapFile.Blocks) {
-                Console.WriteLine($"Block {block.Address}: Previous = {block.PreviousBlock}, Next = {block.NextBlock}");
+                Console.WriteLine($"Block {block.Address}: Previous = {block.PreviousBlockAddress}, Next = {block.NextBlockAddress}");
             }
         }
 
@@ -99,25 +107,6 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             this.heapFile.PrintFile();
-        }
-
-        private void RefreshLists() {
-            customers.Clear();
-            services.Clear();
-            customerIDs.Clear();
-            serviceIDs.Clear();
-
-            foreach (var block in heapFile.Blocks) {
-                foreach (var customer in block.Records) {
-                    customers.Add(customer);
-                    customerIDs.Add(customer.Id);
-
-                    foreach (var service in customer.Services) {
-                        services.Add(service);
-                        serviceIDs.Add(service.Id);
-                    }
-                }
-            }
         }
     }
 }

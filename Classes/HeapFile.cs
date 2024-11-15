@@ -17,144 +17,135 @@
             T recordToInsert = new();
             recordToInsert.FromByteArray(recordData.GetByteArray());
 
-            foreach (var block in this.Blocks) {
+            int currentAddress = this.FirstBlockAddress;
+
+            // Try to find a suitable block for inserting the new record
+            while (currentAddress != -1) {
+                var block = this.FindBlock(currentAddress);
+
+                if (block == null) break;
+
                 if (block.Records.Count < block.MaxRecordsCount) {
                     block.Records.Add(recordToInsert);
                     block.ValidCount++;
 
-                    return this.CalculateRecordAddress(block, block.Records[^1]);
+                    return HeapFile<T>.CalculateRecordAddress(block, recordToInsert);
                 }
+
+                currentAddress = block.NextBlockAddress;
             }
 
-            int blockAddress = this.Blocks.Count > 0 ? this.CalculateBlockAddress(this.Blocks[^1]) + BlockSize : 0;
+            // If no suitable block is found, create a new block
+            int newBlockAddress = this.Blocks.Count > 0 ? this.LastBlockAddress + BlockSize : 0;
 
-            Block<T> blockToInsert = new(1, blockAddress, this.LastBlockAddress, -1);
-            blockToInsert.Records.Add(recordToInsert);
-            this.Blocks.Add(blockToInsert);
-            this.LastBlockAddress = blockToInsert.Address;
+            Block<T> newBlock = new(1, newBlockAddress, this.LastBlockAddress, -1);
+            newBlock.Records.Add(recordToInsert);
+            this.Blocks.Add(newBlock);
 
-            if (this.Blocks.Count > 1) this.Blocks[^2].NextBlock = blockToInsert.Address;
+            if (this.LastBlockAddress != -1) {
+                var lastBlock = this.FindBlock(this.LastBlockAddress);
 
-            return this.CalculateRecordAddress(blockToInsert, blockToInsert.Records[^1]);
+                if (lastBlock != null) lastBlock.NextBlockAddress = newBlock.Address;
+            }
+
+            this.LastBlockAddress = newBlock.Address;
+
+            return HeapFile<T>.CalculateRecordAddress(newBlock, recordToInsert);
         }
 
         public int FindRecord(int blockAddress, IByteData recordData) {
             T recordToFind = new();
             recordToFind.FromByteArray(recordData.GetByteArray());
 
-            if (blockAddress < 0 || blockAddress > this.LastBlockAddress) return -1;
+            int currentAddress = blockAddress;
 
-            foreach (var block in this.Blocks) {
-                if (block.Address == blockAddress) {
-                    foreach (var record in block.Records) {
-                        if (record.EqualsByID(recordToFind)) {
-                            return this.CalculateRecordAddress(block, record);
-                        }
+            while (currentAddress != -1) {
+                var block = this.FindBlock(currentAddress);
+
+                if (block == null) break;
+
+                foreach (var record in block.Records) {
+                    if (record.EqualsByID(recordToFind)) {
+                        return HeapFile<T>.CalculateRecordAddress(block, record);
                     }
                 }
+
+                currentAddress = block.NextBlockAddress;
             }
 
             return -1;
         }
 
         public Block<T>? FindBlock(int blockAddress) {
-            if (blockAddress < 0 || blockAddress > this.LastBlockAddress) return null;
-
-            foreach (var block in this.Blocks) {
-                if (block.Address == blockAddress) {
-                    return block;
-                }
-            }
-
-            return null;
+            return this.Blocks.FirstOrDefault(block => block.Address == blockAddress);
         }
 
         public int DeleteRecord(int blockAddress, IByteData recordData) {
-            if (blockAddress < 0 || blockAddress > this.LastBlockAddress) return -1;
-
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
-            // Find the block that contains the record
-            Block<T>? block = this.FindBlock(blockAddress);
+            int currentAddress = this.FirstBlockAddress;
 
-            if (block == null) return -1;
+            while (currentAddress != -1) {
+                var block = this.FindBlock(currentAddress);
 
-            block.Records.RemoveAll(x => x.EqualsByID(recordToDelete));
-            block.ValidCount = block.Records.Count;
+                if (block == null) break;
 
-            // If the block becomes empty, handle block removal and update links
-            if (block.ValidCount == 0) {
-                // Update links for previous and next blocks
-                if (block.PreviousBlock != -1) {
-                    var previousBlock = this.FindBlock(block.PreviousBlock);
-                    if (previousBlock != null) {
-                        previousBlock.NextBlock = block.NextBlock;
+                if (block.Address == blockAddress) {
+                    block.Records.RemoveAll(record => record.EqualsByID(recordToDelete));
+                    block.ValidCount = block.Records.Count;
+
+                    // If the block is empty, handle removal and links
+                    if (block.ValidCount == 0) {
+                        if (block.PreviousBlockAddress != -1) {
+                            var prevBlock = this.FindBlock(block.PreviousBlockAddress);
+
+                            if (prevBlock != null) prevBlock.NextBlockAddress = block.NextBlockAddress;
+                        }
+
+                        if (block.NextBlockAddress != -1) {
+                            var nextBlock = this.FindBlock(block.NextBlockAddress);
+
+                            if (nextBlock != null) nextBlock.PreviousBlockAddress = block.PreviousBlockAddress;
+                        }
+
+                        if (block.Address == this.FirstBlockAddress) this.FirstBlockAddress = block.NextBlockAddress;
+
+                        if (block.Address == this.LastBlockAddress) this.LastBlockAddress = block.PreviousBlockAddress;
+
+                        this.Blocks.Remove(block);
                     }
+
+                    return blockAddress;
                 }
 
-                if (block.NextBlock != -1) {
-                    var nextBlock = this.FindBlock(block.NextBlock);
-
-                    if (nextBlock != null) {
-                        nextBlock.PreviousBlock = block.PreviousBlock;
-                    }
-                }
-
-                // Update heap file head/tail pointers
-                if (block.Address == this.FirstBlockAddress) {
-                    this.FirstBlockAddress = block.NextBlock;
-                }
-
-                if (block.Address == this.LastBlockAddress) {
-                    this.LastBlockAddress = block.PreviousBlock;
-                }
-
-                this.Blocks.Remove(block);
-
-                // Recalculate addresses for remaining blocks
-                for (int i = 0; i < this.Blocks.Count; i++) {
-                    this.Blocks[i].Address = i * BlockSize;
-                }
+                currentAddress = block.NextBlockAddress;
             }
 
-            return blockAddress;
+            return -1;
         }
 
         public void PrintFile() {
             if (this.Blocks.Count == 0) return;
 
-            foreach (var block in this.Blocks) {
+            int currentAddress = this.FirstBlockAddress;
+
+            while (currentAddress != -1) {
+                var block = this.FindBlock(currentAddress);
+
+                if (block == null) break;
+
                 block.PrintData();
+
+                currentAddress = block.NextBlockAddress;
             }
         }
 
-        private int CalculateBlockAddress(Block<T> block) {
-            int result = 0;
+        private static int CalculateRecordAddress(Block<T> block, T record) {
+            int blockAddress = block.Address;
+            int recordIndex = block.Records.IndexOf(record);
 
-            for (int i = 0; i < this.Blocks.Count; i++) {
-                if (block == this.Blocks[i]) {
-                    result += i * BlockSize;
-                    break;
-                }
-            }
-
-            return result;
-        }
-
-        private int CalculateRecordAddress(Block<T> block, T record) {
-            int result = 0;
-
-            result += this.CalculateBlockAddress(block);
-
-            for (int i = 0; i < block.Records.Count; i++) {
-                if (record.EqualsByID(block.Records[i])) {
-                    result += i * RecordSize;
-                    break;
-                }
-            }
-
-            return result;
+            return blockAddress + recordIndex * RecordSize;
         }
     }
 }
