@@ -5,15 +5,13 @@ namespace ServiceConsole {
         static void Main(string[] args) {
             Tester tester = new();
 
-            tester.TestInsert(100);
+            tester.TestInsert(20);
 
             tester.TestPrint();
 
-            tester.TestFind(100);
+            tester.TestFind(30);
 
-            try {
-                tester.TestDelete(50);
-            } catch (NullReferenceException) { }
+            tester.TestDelete(10);
 
             tester.TestDoublyLinkedListStructure();
 

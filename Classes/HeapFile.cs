@@ -75,6 +75,7 @@
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
+            // Find the block that contains the record
             Block<T>? block = this.FindBlock(blockAddress);
 
             if (block == null) return -1;
@@ -82,35 +83,38 @@
             block.Records.RemoveAll(x => x.EqualsByID(recordToDelete));
             block.ValidCount = block.Records.Count;
 
-            // If the block is now empty, remove it
+            // If the block becomes empty, handle block removal and update links
             if (block.ValidCount == 0) {
                 // Update links for previous and next blocks
                 if (block.PreviousBlock != -1) {
-                    this.Blocks[block.PreviousBlock].NextBlock = block.NextBlock;
+                    var previousBlock = this.FindBlock(block.PreviousBlock);
+                    if (previousBlock != null) {
+                        previousBlock.NextBlock = block.NextBlock;
+                    }
                 }
 
                 if (block.NextBlock != -1) {
-                    this.Blocks[block.NextBlock].PreviousBlock = block.PreviousBlock;
+                    var nextBlock = this.FindBlock(block.NextBlock);
+
+                    if (nextBlock != null) {
+                        nextBlock.PreviousBlock = block.PreviousBlock;
+                    }
                 }
 
                 // Update heap file head/tail pointers
-                if (blockAddress == this.FirstBlockAddress) {
+                if (block.Address == this.FirstBlockAddress) {
                     this.FirstBlockAddress = block.NextBlock;
                 }
 
-                if (blockAddress == this.LastBlockAddress) {
+                if (block.Address == this.LastBlockAddress) {
                     this.LastBlockAddress = block.PreviousBlock;
                 }
 
-                // Remove block from the list
-                this.Blocks.RemoveAt(blockAddress);
+                this.Blocks.Remove(block);
 
-                // Adjust indices of subsequent blocks
+                // Recalculate addresses for remaining blocks
                 for (int i = 0; i < this.Blocks.Count; i++) {
-                    Block<T> updatedBlock = this.Blocks[i];
-
-                    if (updatedBlock.PreviousBlock > blockAddress) updatedBlock.PreviousBlock--;
-                    if (updatedBlock.NextBlock > blockAddress) updatedBlock.NextBlock--;
+                    this.Blocks[i].Address = i * BlockSize;
                 }
             }
 
@@ -118,6 +122,8 @@
         }
 
         public void PrintFile() {
+            if (this.Blocks.Count == 0) return;
+
             foreach (var block in this.Blocks) {
                 block.PrintData();
             }

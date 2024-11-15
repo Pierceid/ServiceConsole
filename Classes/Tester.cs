@@ -1,11 +1,20 @@
 ﻿namespace ServiceConsole.Classes {
     public class Tester {
-        private HeapFile<Customer> heapFile = new();
-        private Random random = new();
-        private List<Customer> customers = [];
-        private List<Service> services = [];
-        private List<int> customerIDs = [];
-        private List<int> serviceIDs = [];
+        private readonly HeapFile<Customer> heapFile;
+        private readonly Random random;
+        private readonly List<Customer> customers;
+        private readonly List<Service> services;
+        private readonly List<int> customerIDs;
+        private readonly List<int> serviceIDs;
+
+        public Tester() {
+            this.heapFile = new();
+            this.random = new();
+            this.customers = [];
+            this.services = [];
+            this.customerIDs = [];
+            this.serviceIDs = [];
+        }
 
         public void TestInsert(int recordsCount) {
             Console.WriteLine("------------------------------------------------------------------------------------");
@@ -64,13 +73,13 @@
 
                 int blockIndex = random.Next(this.heapFile.Blocks.Count);
                 Block<Customer> blockToDelete = this.heapFile.Blocks[blockIndex];
-                int receordIndex = random.Next(blockToDelete.Records.Count);
-                IByteData recordData = blockToDelete.Records[receordIndex];
+                int recordIndex = random.Next(blockToDelete.Records.Count);
+                IByteData recordData = blockToDelete.Records[recordIndex];
 
                 int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, recordData);
 
                 if (deletedAddress != -1) {
-                    Console.WriteLine($"Block {deletedAddress}, Record {receordIndex} was deleted successfully.");
+                    Console.WriteLine($"Block {deletedAddress}, Record {recordIndex} was deleted successfully.");
                 } else {
                     Console.WriteLine("Failed to delete customer.");
                     throw new NullReferenceException();
