@@ -76,10 +76,6 @@
             return -1;
         }
 
-        public Block<T>? FindBlock(int blockAddress) {
-            return this.Blocks.FirstOrDefault(block => block.Address == blockAddress);
-        }
-
         public int DeleteRecord(int blockAddress, IByteData recordData) {
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
@@ -125,6 +121,10 @@
             return -1;
         }
 
+        public int Seek() {
+            return (this.Blocks.Count - 1) * BlockSize;
+        }
+
         public void PrintFile() {
             if (this.Blocks.Count == 0) return;
 
@@ -141,11 +141,15 @@
             }
         }
 
+        private Block<T>? FindBlock(int blockAddress) {
+            return this.Blocks.FirstOrDefault(block => block.Address == blockAddress);
+        }
+
         private static int CalculateRecordAddress(Block<T> block, T record) {
             int blockAddress = block.Address;
-            int recordIndex = block.Records.IndexOf(record);
+            int recordAddress = block.Records.IndexOf(record) * RecordSize;
 
-            return blockAddress + recordIndex * RecordSize;
+            return blockAddress + recordAddress;
         }
     }
 }
