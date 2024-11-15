@@ -9,7 +9,7 @@ namespace ServiceConsole.Classes {
         private const int MaxNameLength = 15;
         private const int MaxSurnameLength = 20;
         private const int MaxServicesCount = 5;
-        private const int ServiceSize = 37;
+        private const int ServiceSize = 40;
 
         public Customer() {
             this.Name = string.Empty;
@@ -89,7 +89,7 @@ namespace ServiceConsole.Classes {
         }
 
         public override int GetSize() {
-            // id + namelength + name + SurnameLength + Surname + servicesCount + services
+            // ID (4) + Namelength (1) + Name (15) + SurnameLength (1) + Surname (20) + ServicesCount (1) + Services (5*40)
             return 4 + 1 + MaxNameLength + 1 + MaxSurnameLength + 1 + MaxServicesCount * ServiceSize;
         }
 

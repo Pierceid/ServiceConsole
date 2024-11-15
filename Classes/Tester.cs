@@ -25,7 +25,7 @@
                 int servicesCount = random.Next(1, 6);
 
                 for (int j = 0; j < servicesCount; j++) {
-                    Service service = new(DateTime.Now.Second, Math.Round(random.NextDouble() * 200, 2), $"Desc{j}");
+                    Service service = new(DateTime.Now.AddDays(-random.Next(1000)).ToString("ddMMyy"), Math.Round(random.NextDouble() * 200, 2), $"Desc{j}");
                     customer.Services.Add(service);
 
                     services.Add(service);

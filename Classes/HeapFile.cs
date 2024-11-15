@@ -4,8 +4,8 @@
         public int LastBlockAddress { get; set; } = -1;
         public List<Block<T>> Blocks { get; set; } = [];
 
-        private const int RecordSize = 227;
-        private const int BlockSize = 1816;
+        private const int RecordSize = 242;
+        private const int BlockSize = 1936;
 
         public int InsertRecord(IByteData recordData) {
             if (this.FirstBlockAddress == -1) {
