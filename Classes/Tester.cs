@@ -32,11 +32,11 @@
                     serviceIDs.Add(service.Id);
                 }
 
-                int address = this.heapFile.InsertRecord(customer);
+                int insertedAddress = this.heapFile.InsertRecord(customer);
 
-                Console.WriteLine($"Inserted Customer {customer.Name} {customer.Surname} at address {address}");
-
-                if (address == -1) {
+                if (insertedAddress != -1) {
+                    Console.WriteLine($"Record inserted at address: [#{insertedAddress}]");
+                } else {
                     throw new NullReferenceException("Failed to insert record.");
                 }
 
@@ -56,7 +56,7 @@
                 int foundAddress = this.heapFile.FindRecord(blockToFind.Address, recordData);
 
                 if (foundAddress != -1) {
-                    Console.WriteLine($"Customer found at address: {foundAddress}");
+                    Console.WriteLine($"Record found at address: [#{foundAddress}]");
                 } else {
                     throw new NullReferenceException("Failed to find record.");
                 }
@@ -80,7 +80,7 @@
                 int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, customerToDelete);
 
                 if (deletedAddress != -1) {
-                    Console.WriteLine($"Customer {customerToDelete.Name} {customerToDelete.Surname} deleted successfully from address {deletedAddress}.");
+                    Console.WriteLine($"Record deleted from address: [#{deletedAddress}]");
 
                     customers.Remove(customerToDelete);
                     customerIDs.Remove(customerToDelete.Id);
@@ -99,7 +99,7 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             foreach (var block in this.heapFile.Blocks) {
-                Console.WriteLine($"Block {block.Address}: Previous = {block.PreviousBlockAddress}, Next = {block.NextBlockAddress}");
+                Console.WriteLine($"Block [#{block.Address}]: Previous = [#{block.PreviousBlockAddress}], Next = [#{block.NextBlockAddress}]");
             }
         }
 
