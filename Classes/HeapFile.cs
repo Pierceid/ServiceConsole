@@ -1,71 +1,104 @@
 ﻿namespace ServiceConsole.Classes {
-    public class HeapFile<T> where T : IRecord<T> {
-        public int FirstValidBlock { get; set; }
-        public int FirstInvalidBlock { get; set; }
-        public List<Block<T>> Blocks { get; set; }
-
-        public HeapFile() {
-            this.FirstValidBlock = -1;
-            this.FirstInvalidBlock = -1;
-            this.Blocks = [];
-        }
+    public class HeapFile<T> where T : IRecord<T>, IByteData, new() {
+        public int FirstBlockIndex { get; set; } = -1;
+        public int LastBlockIndex { get; set; } = -1;
+        public List<Block<T>> Blocks { get; set; } = [];
 
         public int Insert(IByteData data) {
-            // Try to insert into the first block with space
+            T newRecord = new();
+            newRecord.FromByteArray(data.GetByteArray());
+
+            // Try to insert into an existing block with free space
             foreach (var block in this.Blocks) {
                 if (block.ValidCount < block.Records.Count) {
-                    T newRecord = Activator.CreateInstance<T>();
-                    newRecord.FromByteArray(data.GetByteArray());
                     block.Records.Add(newRecord);
                     block.ValidCount++;
+
                     return block.Records.Count - 1;
                 }
             }
 
-            // If no valid block is found, create a new block and insert the record
-            Block<T> newBlock = new(1, this.FirstValidBlock, -1);
-            T newRecordInBlock = Activator.CreateInstance<T>();
-            newRecordInBlock.FromByteArray(data.GetByteArray());
-            newBlock.Records.Add(newRecordInBlock);
-            newBlock.ValidCount = 1;
+            // Create a new block and add it to the list
+            Block<T> newBlock = new(1, this.LastBlockIndex, -1);
+            newBlock.Records.Add(newRecord);
 
-            // Add new block to the heap file
+            if (this.LastBlockIndex != -1) {
+                this.Blocks[this.LastBlockIndex].NextBlock = this.Blocks.Count;
+            }
+
             this.Blocks.Add(newBlock);
-            this.FirstValidBlock = this.Blocks.Count - 1;
 
-            return 0;
+            if (this.FirstBlockIndex == -1) {
+                this.FirstBlockIndex = 0;
+            }
+
+            this.LastBlockIndex = this.Blocks.Count - 1;
+
+            return this.LastBlockIndex;
         }
 
+        public int Find(int blockIndex, int recordIndex) {
+            if (blockIndex < 0 || blockIndex >= this.Blocks.Count) {
+                return -1;
+            }
 
-        public int Find(int address, IByteData data) {
-            foreach (var block in Blocks) {
-                if (address < block.Records.Count) {
-                    data.FromByteArray(block.Records[address].GetByteArray());
-                    return address;
+            Block<T> block = this.Blocks[blockIndex];
+
+            if (recordIndex < 0 || recordIndex >= block.Records.Count) {
+                return -1;
+            }
+
+            int address = 0;
+
+            for (int i = 0; i < blockIndex; i++) {
+                address += this.Blocks[i].Records.Count;
+            }
+
+            address += recordIndex;
+
+            return address;
+        }
+
+        public int Delete(int blockIndex, int recordIndex) {
+            if (blockIndex < 0 || blockIndex >= this.Blocks.Count) return -1;
+
+            Block<T> block = this.Blocks[blockIndex];
+
+            if (recordIndex < 0 || recordIndex >= block.Records.Count) return -1;
+
+            // Mark the record as invalid
+            block.Records[recordIndex] = default!;
+            block.ValidCount--;
+
+            if (block.ValidCount == 0) {
+                // Remove block if empty
+                if (block.PreviousBlock != -1) {
+                    this.Blocks[block.PreviousBlock].NextBlock = block.NextBlock;
+                }
+
+                if (block.NextBlock != -1) {
+                    this.Blocks[block.NextBlock].PreviousBlock = block.PreviousBlock;
+                }
+
+                if (blockIndex == this.FirstBlockIndex) {
+                    this.FirstBlockIndex = block.NextBlock;
+                }
+
+                if (blockIndex == this.LastBlockIndex) {
+                    this.LastBlockIndex = block.PreviousBlock;
                 }
             }
 
-            return -1;
-        }
-
-        public int Delete(int address, IByteData data) {
-            foreach (var block in Blocks) {
-                if (address < block.Records.Count) {
-                    block.Records.RemoveAt(address);
-                    block.ValidCount--;
-                    return address;
-                }
-            }
-
-            return -1;
+            return blockIndex;
         }
 
         public void PrintFile() {
-            if (this.Blocks.Count == 0) return;
+            int currentBlockIndex = this.FirstBlockIndex;
 
-            for (int i = 0; i < this.Blocks.Count; i++) {
-                Console.Write($"{i}. ");
-                this.Blocks[i].PrintData();
+            while (currentBlockIndex != -1) {
+                Console.WriteLine($"Block {currentBlockIndex}:");
+                this.Blocks[currentBlockIndex].PrintData();
+                currentBlockIndex = this.Blocks[currentBlockIndex].NextBlock;
             }
         }
     }

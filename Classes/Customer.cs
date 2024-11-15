@@ -9,7 +9,7 @@ namespace ServiceConsole.Classes {
         private const int MaxNameLength = 15;
         private const int MaxSurnameLength = 20;
         private const int MaxServicesCount = 5;
-        private const int ServiceSize = 33;
+        private const int ServiceSize = 37;
 
         public Customer() {
             this.Name = string.Empty;
