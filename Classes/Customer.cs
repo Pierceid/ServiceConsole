@@ -97,7 +97,7 @@ namespace ServiceConsole.Classes {
             string result = $"Customer - {this.Name} {this.Surname}:";
 
             foreach (var service in this.Services) {
-                result += $"\n{service.GetInfo()}";
+                result += $"\n  {service.GetInfo()}";
             }
 
             return result;
