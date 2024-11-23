@@ -4,22 +4,26 @@ namespace ServiceConsole.Classes {
     public class Customer : Item<Customer> {
         public string Name { get; set; }
         public string Surname { get; set; }
-        public List<Service> Services { get; set; }
+        public string ECV { get; set; }
+        public List<CarService> Services { get; set; }
 
         private const int MaxNameLength = 15;
         private const int MaxSurnameLength = 20;
+        private const int MaxECVLength = 10;
         private const int MaxServicesCount = 5;
         private const int ServiceSize = 40;
 
         public Customer() {
-            this.Name = string.Empty;
-            this.Surname = string.Empty;
+            this.Name = string.Empty.PadRight(MaxNameLength);
+            this.Surname = string.Empty.PadRight(MaxSurnameLength);
+            this.ECV = string.Empty.PadRight(MaxECVLength);
             this.Services = [];
         }
 
-        public Customer(string name, string surname) {
-            this.Name = name.Length > MaxNameLength ? name[..MaxNameLength] : name;
-            this.Surname = surname.Length > MaxSurnameLength ? surname[..MaxSurnameLength] : surname;
+        public Customer(string name, string surname, string ecv) {
+            this.Name = name.Length > MaxNameLength ? name[..MaxNameLength] : name.PadRight(MaxNameLength);
+            this.Surname = surname.Length > MaxSurnameLength ? surname[..MaxSurnameLength] : surname.PadRight(MaxSurnameLength);
+            this.ECV = ecv.Length > MaxECVLength ? ecv[..MaxECVLength] : ecv.PadRight(MaxECVLength);
             this.Services = [];
         }
 
@@ -32,30 +36,33 @@ namespace ServiceConsole.Classes {
         }
 
         public override void FromByteArray(byte[] data) {
-            if (data.Length < this.GetSize()) throw new ArgumentException("Invalid byte array size.");
+            if (data.Length > this.GetSize()) throw new ArgumentException("Invalid byte array size.");
 
             // Deserialize ID (4 bytes)
             this.Id = BitConverter.ToInt32(data, 0);
 
-            // Deserialize name (1 + 15 bytes)
-            byte nameLength = data[4];
-            this.Name = Encoding.ASCII.GetString(data, 5, nameLength);
+            // Deserialize Name (15 bytes, padded)
+            this.Name = Encoding.ASCII.GetString(data, 4, MaxNameLength).TrimEnd();
 
-            // Deserialize Surname (1 + 20 bytes)
-            byte SurnameLength = data[5 + nameLength];
-            this.Surname = Encoding.ASCII.GetString(data, 6 + nameLength, SurnameLength);
+            // Deserialize Surname (20 bytes, padded)
+            this.Surname = Encoding.ASCII.GetString(data, 4 + MaxNameLength, MaxSurnameLength).TrimEnd();
 
-            // Deserialize services (1 + 37 * servicesCount bytes)
-            byte serviceCount = data[6 + nameLength + SurnameLength];
+            // Deserialize ECV (10 bytes, padded)
+            this.ECV = Encoding.ASCII.GetString(data, 4 + MaxNameLength + MaxSurnameLength, MaxECVLength).TrimEnd();
+
+            // Deserialize Services (1 + ServiceSize * number of services bytes)
+            int offset = 4 + MaxNameLength + MaxSurnameLength + MaxECVLength;
+            byte serviceCount = data[offset];
             this.Services = [];
 
             for (int i = 0; i < serviceCount; i++) {
+                if (offset + 1 + i * ServiceSize >= data.Length) break;
+
                 byte[] serviceData = new byte[ServiceSize];
-                Array.Copy(data, 7 + nameLength + SurnameLength + i * ServiceSize, serviceData, 0, ServiceSize);
+                Array.Copy(data, offset + 1 + i * ServiceSize, serviceData, 0, ServiceSize);
 
-                Service service = new();
+                CarService service = new();
                 service.FromByteArray(serviceData);
-
                 this.Services.Add(service);
             }
         }
@@ -66,38 +73,41 @@ namespace ServiceConsole.Classes {
             // Serialize ID (4 bytes)
             BitConverter.GetBytes(this.Id).CopyTo(data, 0);
 
-            // Serialize name (1 + 15 bytes)
-            byte[] nameBytes = Encoding.ASCII.GetBytes(this.Name);
-            data[4] = (byte)nameBytes.Length;
-            Array.Copy(nameBytes, 0, data, 5, nameBytes.Length);
+            // Serialize Name (15 bytes, padded)
+            byte[] nameBytes = Encoding.ASCII.GetBytes(this.Name.PadRight(MaxNameLength));
+            Array.Copy(nameBytes, 0, data, 4, MaxNameLength);
 
-            // Serialize Surname (1 + 20 bytes)
-            byte[] SurnameBytes = Encoding.ASCII.GetBytes(this.Surname);
-            data[5 + nameBytes.Length] = (byte)SurnameBytes.Length;
-            Array.Copy(SurnameBytes, 0, data, 6 + nameBytes.Length, SurnameBytes.Length);
+            // Serialize Surname (20 bytes, padded)
+            byte[] surnameBytes = Encoding.ASCII.GetBytes(this.Surname.PadRight(MaxSurnameLength));
+            Array.Copy(surnameBytes, 0, data, 4 + MaxNameLength, MaxSurnameLength);
 
-            // Serialize services (1 + 37 * servicesCount bytes)
-            byte serviceCount = (byte)Math.Min(this.Services.Count, MaxServicesCount);
-            data[6 + nameBytes.Length + SurnameBytes.Length] = serviceCount;
+            // Serialize ECV (10 bytes, padded)
+            byte[] ecvBytes = Encoding.ASCII.GetBytes(this.ECV.PadRight(MaxECVLength));
+            Array.Copy(ecvBytes, 0, data, 4 + MaxNameLength + MaxSurnameLength, MaxECVLength);
+
+            // Serialize Services (1 byte for service count + ServiceSize * number of services bytes)
+            int offset = 4 + MaxNameLength + MaxSurnameLength + MaxECVLength;
+            byte serviceCount = (byte)this.Services.Count;
+            data[offset] = serviceCount;
 
             for (int i = 0; i < serviceCount; i++) {
                 byte[] serviceData = this.Services[i].GetByteArray();
-                Array.Copy(serviceData, 0, data, 7 + nameBytes.Length + SurnameBytes.Length + i * ServiceSize, ServiceSize);
+                Array.Copy(serviceData, 0, data, offset + 1 + i * ServiceSize, ServiceSize);
             }
 
             return data;
         }
 
         public override int GetSize() {
-            // ID (4) + Namelength (1) + Name (15) + SurnameLength (1) + Surname (20) + ServicesCount (1) + Services (5*40)
-            return 4 + 1 + MaxNameLength + 1 + MaxSurnameLength + 1 + MaxServicesCount * ServiceSize;
+            // ID (4) + Name (15) + Surname (20) + ECV (10) + ServicesCount (1) + Services (5 * 40)
+            return 4 + MaxNameLength + MaxSurnameLength + MaxECVLength + 1 + MaxServicesCount * ServiceSize;
         }
 
         public override string GetInfo() {
-            string result = $"  Customer - {this.Name} {this.Surname}:";
+            string result = $"Customer - {this.Name.TrimEnd()} {this.Surname.TrimEnd()} (ECV: {this.ECV.TrimEnd()}):";
 
             foreach (var service in this.Services) {
-                result += $"\n    {service.GetInfo()}";
+                result += $"\n{service.GetInfo()}";
             }
 
             return result;

@@ -1,39 +1,41 @@
 ﻿namespace ServiceConsole.Classes {
     public class Block<T> where T : IRecord<T>, IByteData {
-        public int ValidCount { get; set; }
         public int Address { get; set; }
-        public int PreviousBlockAddress { get; set; }
-        public int NextBlockAddress { get; set; }
+        public int PreviousAddress { get; set; }
+        public int NextAddress { get; set; }
+        public int ValidCount { get; set; }
         public List<T> Records { get; set; }
-        public int MaxRecordsCount { get => 8; }
 
         public Block() {
+            this.Address = 0;
+            this.PreviousAddress = 0;
+            this.NextAddress = 0;
             this.ValidCount = 0;
-            this.Address = -1;
-            this.PreviousBlockAddress = -1;
-            this.NextBlockAddress = -1;
             this.Records = [];
         }
 
-        public Block(int validCount, int address, int previousBlock, int nextBlock) {
-            this.ValidCount = validCount;
+        public Block(int address, int previousBlock, int nextBlock, int validCount) {
             this.Address = address;
-            this.PreviousBlockAddress = previousBlock;
-            this.NextBlockAddress = nextBlock;
+            this.PreviousAddress = previousBlock;
+            this.NextAddress = nextBlock;
+            this.ValidCount = validCount;
             this.Records = [];
         }
 
         public byte[] GetByteArray() {
             List<byte> data = [];
 
-            // Serialize ValidCount (4 bytes)
-            data.AddRange(BitConverter.GetBytes(this.ValidCount));
+            // Serialize Address (4 bytes)
+            data.AddRange(BitConverter.GetBytes(this.Address));
 
             // Serialize PreviousBlock (4 bytes)
-            data.AddRange(BitConverter.GetBytes(this.PreviousBlockAddress));
+            data.AddRange(BitConverter.GetBytes(this.PreviousAddress));
 
             // Serialize NextBlock (4 bytes)
-            data.AddRange(BitConverter.GetBytes(this.NextBlockAddress));
+            data.AddRange(BitConverter.GetBytes(this.NextAddress));
+
+            // Serialize ValidCount (4 bytes)
+            data.AddRange(BitConverter.GetBytes(this.ValidCount));
 
             // Serialize Records
             foreach (var record in this.Records) {
@@ -45,24 +47,28 @@
         }
 
         public void FromByteArray(byte[] data) {
-            if (data.Length < 12) throw new ArgumentException("Invalid byte array size.");
+            if (data.Length < 16) throw new ArgumentException("Invalid byte array size.");
 
-            // Deserialize ValidCount (4 bytes)
-            this.ValidCount = BitConverter.ToInt32(data, 0);
+            // Deserialize Address (4 bytes)
+            this.Address = BitConverter.ToInt32(data, 0);
 
             // Deserialize PreviousBlock (4 bytes)
-            this.PreviousBlockAddress = BitConverter.ToInt32(data, 4);
+            this.PreviousAddress = BitConverter.ToInt32(data, 4);
 
             // Deserialize NextBlock (4 bytes)
-            this.NextBlockAddress = BitConverter.ToInt32(data, 8);
+            this.NextAddress = BitConverter.ToInt32(data, 8);
+
+            // Deserialize ValidCount (4 bytes)
+            this.ValidCount = BitConverter.ToInt32(data, 12);
 
             // Deserialize Records
-            int offset = 12;
+            int offset = 16;
             this.Records = [];
 
-            while (offset < data.Length) {
+            for (int i = 0; i < this.ValidCount; i++) {
                 T record = Activator.CreateInstance<T>();
                 int recordSize = record.GetSize();
+
                 byte[] recordData = new byte[recordSize];
                 Array.Copy(data, offset, recordData, 0, recordSize);
 
@@ -74,8 +80,8 @@
         }
 
         public int GetSize() {
-            // ValidCount (4 bytes) + PreviousBlock (4 bytes) + NextBlock (4 bytes)
-            int size = 12;
+            // Address (4 bytes) + PreviousAddress (4 bytes) + NextAddress (4 bytes) + ValidCount (4 bytes)
+            int size = 16;
 
             // Add size of all records
             foreach (var record in this.Records) {
@@ -88,7 +94,7 @@
         public void PrintData() {
             Console.WriteLine($"Block [#{this.Address}]");
 
-            for (int i = 0; i < this.ValidCount; i++) {
+            for (int i = 0; i < Math.Min(this.ValidCount, this.Records.Count); i++) {
                 Console.WriteLine($"{this.Records[i].GetInfo()}");
             }
         }

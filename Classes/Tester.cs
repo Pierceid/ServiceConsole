@@ -3,13 +3,13 @@
         private readonly HeapFile<Customer> heapFile;
         private readonly Random random;
         private readonly List<Customer> customers;
-        private readonly List<Service> services;
+        private readonly List<CarService> services;
         private readonly List<int> customerIDs;
         private readonly List<int> serviceIDs;
 
         public Tester() {
-            this.heapFile = new();
-            this.random = new();
+            this.heapFile = new HeapFile<Customer>(8, Path.GetFullPath(Path.Combine("..", "..", "..", "Resources", "heap-file.bin")));
+            this.random = new Random();
             this.customers = [];
             this.services = [];
             this.customerIDs = [];
@@ -20,19 +20,20 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             for (int i = 0; i < recordsCount; i++) {
-                Customer customer = new($"Name{i}", $"Surname{i}");
+                Customer customer = new($"Name{i}", $"Surname{i}", $"ECV{i}");
 
                 int servicesCount = random.Next(1, 6);
 
                 for (int j = 0; j < servicesCount; j++) {
-                    Service service = new(DateTime.Now.AddDays(-random.Next(1000)).ToString("ddMMyy"), Math.Round(random.NextDouble() * 200, 2), $"Desc{j}");
-                    customer.Services.Add(service);
+                    CarService service = new(DateTime.Now.AddDays(-random.Next(1000)), Math.Round(random.NextDouble() * 200, 2), [$"Desc{j}", $"Desc{j + 1}"]);
 
+                    customer.Services.Add(service);
                     services.Add(service);
                     serviceIDs.Add(service.Id);
                 }
 
-                int insertedAddress = this.heapFile.InsertRecord(customer);
+                IByteData recordData = customer;
+                int insertedAddress = this.heapFile.InsertRecord(recordData);
 
                 if (insertedAddress != -1) {
                     Console.WriteLine($"Record inserted at address: [#{insertedAddress}]");
@@ -49,11 +50,11 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             for (int i = 0; i < recordsCount; i++) {
-                int blockIndex = random.Next(this.heapFile.Blocks.Count);
-                Block<Customer> blockToFind = this.heapFile.Blocks[blockIndex];
-                IByteData recordData = blockToFind.Records[random.Next(blockToFind.Records.Count)];
+                // Randomly select a customer to find
+                Customer customerToFind = customers[random.Next(customers.Count)];
+                IByteData recordData = customerToFind;
 
-                int foundAddress = this.heapFile.FindRecord(blockToFind.Address, recordData);
+                int foundAddress = this.heapFile.FindRecord(this.heapFile.FirstBlockAddress, recordData);
 
                 if (foundAddress != -1) {
                     Console.WriteLine($"Record found at address: [#{foundAddress}]");
@@ -67,17 +68,12 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             for (int i = 0; i < recordsCount; i++) {
-                if (this.heapFile.Blocks.Count == 0) break;
+                if (this.customers.Count == 0) break;
 
-                int blockIndex = random.Next(this.heapFile.Blocks.Count);
-                Block<Customer> blockToDelete = this.heapFile.Blocks[blockIndex];
+                Customer customerToDelete = customers[random.Next(customers.Count)];
+                IByteData recordData = customerToDelete;
 
-                if (blockToDelete.Records.Count == 0) continue;
-
-                int recordIndex = random.Next(blockToDelete.ValidCount);
-                Customer customerToDelete = blockToDelete.Records[recordIndex];
-
-                int deletedAddress = this.heapFile.DeleteRecord(blockToDelete.Address, customerToDelete);
+                int deletedAddress = this.heapFile.DeleteRecord(this.heapFile.FirstBlockAddress, recordData);
 
                 if (deletedAddress != -1) {
                     Console.WriteLine($"Record deleted from address: [#{deletedAddress}]");
@@ -98,17 +94,17 @@
         public void TestDoublyLinkedListStructure() {
             Console.WriteLine("------------------------------------------------------------------------------------");
 
-            foreach (var block in this.heapFile.Blocks) {
-                Console.WriteLine($"Block [#{block.Address}]: Previous = [#{block.PreviousBlockAddress}], Next = [#{block.NextBlockAddress}]");
-            }
+            this.heapFile.CheckStructure();
         }
 
+        // Test Print: Print the content of the file
         public void TestPrint() {
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             this.heapFile.PrintFile();
         }
 
+        // Test Seek: Return the address of the end of the file
         public void TestSeek() {
             Console.WriteLine("------------------------------------------------------------------------------------");
 
