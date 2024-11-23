@@ -5,11 +5,11 @@ namespace ServiceConsole {
         static void Main(string[] args) {
             Tester tester = new();
 
-            tester.TestInsert(100);
+            tester.TestInsert(1000);
 
             tester.TestPrint();
 
-            tester.TestFind(100);
+            tester.TestFind(1000);
 
             //tester.TestDelete(990);
 

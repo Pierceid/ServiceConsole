@@ -35,6 +35,7 @@
                     }
 
                     WriteBlock(block);
+
                     return block.Address;
                 }
             }
@@ -101,9 +102,11 @@
 
         public void PrintFile() {
             Console.ForegroundColor = ConsoleColor.Yellow;
+
             PrintBlocks(this.FirstPartiallyFullBlock);
 
             Console.ForegroundColor = ConsoleColor.Green;
+
             PrintBlocks(this.FirstFullBlock);
 
             Console.ResetColor();
@@ -199,6 +202,7 @@
         private void RemoveFromPartiallyFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = ReadBlock(block.PreviousAddress);
+
                 if (prevBlock != null) {
                     prevBlock.NextAddress = block.NextAddress;
                     WriteBlock(prevBlock);
@@ -207,6 +211,7 @@
 
             if (block.NextAddress != -1) {
                 var nextBlock = ReadBlock(block.NextAddress);
+
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.PreviousAddress;
                     WriteBlock(nextBlock);
@@ -223,6 +228,7 @@
         private void AddToFullBlocks(Block<T> block) {
             if (this.FirstFullBlock != -1) {
                 var nextBlock = ReadBlock(this.FirstFullBlock);
+
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.Address;
                     WriteBlock(nextBlock);
@@ -239,6 +245,7 @@
         private void RemoveFromFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = ReadBlock(block.PreviousAddress);
+
                 if (prevBlock != null) {
                     prevBlock.NextAddress = block.NextAddress;
                     WriteBlock(prevBlock);
@@ -247,6 +254,7 @@
 
             if (block.NextAddress != -1) {
                 var nextBlock = ReadBlock(block.NextAddress);
+
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.PreviousAddress;
                     WriteBlock(nextBlock);
