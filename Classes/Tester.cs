@@ -50,11 +50,12 @@
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             for (int i = 0; i < recordsCount; i++) {
-                // Randomly select a customer to find
                 Customer customerToFind = customers[random.Next(customers.Count)];
                 IByteData recordData = customerToFind;
 
-                int foundAddress = this.heapFile.FindRecord(this.heapFile.FirstBlockAddress, recordData);
+                int foundAddress = this.heapFile.FindRecord(this.heapFile.FirstPartiallyFullBlock, recordData);
+
+                if (foundAddress == -1) foundAddress = this.heapFile.FindRecord(this.heapFile.FirstFullBlock, recordData);
 
                 if (foundAddress != -1) {
                     Console.WriteLine($"Record found at address: [#{foundAddress}]");
@@ -73,7 +74,9 @@
                 Customer customerToDelete = customers[random.Next(customers.Count)];
                 IByteData recordData = customerToDelete;
 
-                int deletedAddress = this.heapFile.DeleteRecord(this.heapFile.FirstBlockAddress, recordData);
+                int deletedAddress = this.heapFile.DeleteRecord(this.heapFile.FirstPartiallyFullBlock, recordData);
+
+                if (deletedAddress == -1) deletedAddress = this.heapFile.DeleteRecord(this.heapFile.FirstFullBlock, recordData);
 
                 if (deletedAddress != -1) {
                     Console.WriteLine($"Record deleted from address: [#{deletedAddress}]");
@@ -97,18 +100,16 @@
             this.heapFile.CheckStructure();
         }
 
-        // Test Print: Print the content of the file
         public void TestPrint() {
             Console.WriteLine("------------------------------------------------------------------------------------");
 
             this.heapFile.PrintFile();
         }
 
-        // Test Seek: Return the address of the end of the file
         public void TestSeek() {
             Console.WriteLine("------------------------------------------------------------------------------------");
 
-            Console.WriteLine($"Seek (address of the end of file): {this.heapFile.Seek()}");
+            Console.WriteLine($"Seek: {this.heapFile.Seek()}");
         }
     }
 }

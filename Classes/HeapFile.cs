@@ -1,87 +1,53 @@
-﻿using System.Runtime.CompilerServices;
-
-namespace ServiceConsole.Classes {
+﻿namespace ServiceConsole.Classes {
     public class HeapFile<T> where T : IRecord<T>, IByteData, new() {
         private readonly int Factor;
         private readonly string FilePath;
-        private readonly int HeaderSize;
         private readonly int BlockSize;
-        private readonly int RecordSize;
-        public int FirstBlockAddress { get; set; } = -1;
-        public int LastBlockAddress { get; set; } = -1;
-        public int FirstPartiallyEmptyBlockAddress { get; set; } = -1;
-        public int FirstEmptyBlockAddress { get; set; } = -1;
+
+        public int FirstPartiallyFullBlock { get; set; } = -1;
+        public int FirstFullBlock { get; set; } = -1;
+        public List<int> PartiallyFullBlocks { get; set; } = new();
+        public List<int> FullBlocks { get; set; } = new();
 
         public HeapFile(int factor, string filePath) {
             this.Factor = factor;
             this.FilePath = filePath;
-            this.HeaderSize = 16;
-            this.RecordSize = new T().GetSize();
-            this.BlockSize = this.HeaderSize + this.Factor * this.RecordSize;
+            this.BlockSize = new Block<T>(this.Factor).GetSize();
         }
 
         public int InsertRecord(IByteData recordData) {
             T record = new();
             record.FromByteArray(recordData.GetByteArray());
 
-            // Prioritize partially empty blocks
-            if (this.FirstPartiallyEmptyBlockAddress != -1) {
-                var block = ReadBlock(this.FirstPartiallyEmptyBlockAddress);
+            // Prioritize partially full blocks
+            if (this.PartiallyFullBlocks.Count > 0) {
+                var blockAddress = this.PartiallyFullBlocks[0];
+                var block = ReadBlock(blockAddress);
 
                 if (block != null) {
                     block.Records.Add(record);
                     block.ValidCount++;
 
-                    // If block is now full, update partially empty list
-                    if (block.ValidCount == this.BlockSize / this.RecordSize) {
-                        RemoveFromPartiallyEmptyList(block);
+                    // If the block is now full, move it to the full blocks list
+                    if (block.ValidCount == this.Factor) {
+                        RemoveFromPartiallyFullBlocks(block);
+                        AddToFullBlocks(block);
                     }
 
                     WriteBlock(block);
-
-                    return CalculateRecordAddress(block, record);
+                    return block.Address;
                 }
             }
 
-            // Use an empty block if available
-            if (this.FirstEmptyBlockAddress != -1) {
-                var block = ReadBlock(this.FirstEmptyBlockAddress);
-
-                if (block != null) {
-                    block.Records.Add(record);
-                    block.ValidCount = 1;
-
-                    RemoveFromEmptyList(block);
-                    AddToPartiallyEmptyList(block);
-                    WriteBlock(block);
-
-                    return CalculateRecordAddress(block, record);
-                }
-            }
-
-            // Create a new block
-            int newBlockAddress = this.LastBlockAddress == -1 ? 0 : this.LastBlockAddress + this.BlockSize;
-            Block<T> newBlock = new(newBlockAddress, this.LastBlockAddress, -1, 1);
+            // If no partially full block exists, create a new block
+            int newBlockAddress = Seek();
+            Block<T> newBlock = new(newBlockAddress, -1, this.FirstPartiallyFullBlock, 1, this.Factor);
             newBlock.Records.Add(record);
 
-            // Update doubly linked list
-            if (this.LastBlockAddress != -1) {
-                var lastBlock = ReadBlock(this.LastBlockAddress);
-
-                if (lastBlock != null) {
-                    lastBlock.NextAddress = newBlock.Address;
-                    WriteBlock(lastBlock);
-                }
-            }
-
-            this.LastBlockAddress = newBlock.Address;
-
-            if (this.FirstBlockAddress == -1) this.FirstBlockAddress = newBlock.Address;
-
-            AddToPartiallyEmptyList(newBlock);
+            AddToPartiallyFullBlocks(newBlock);
             WriteBlock(newBlock);
 
-            return CalculateRecordAddress(newBlock, record);
+            return newBlock.Address;
         }
 
         public int FindRecord(int blockAddress, IByteData recordData) {
@@ -97,7 +63,7 @@ namespace ServiceConsole.Classes {
 
                 foreach (var record in block.Records) {
                     if (record.EqualsByID(recordToFind)) {
-                        return CalculateRecordAddress(block, record);
+                        return currentAddress;
                     }
                 }
 
@@ -112,7 +78,6 @@ namespace ServiceConsole.Classes {
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
             var block = ReadBlock(blockAddress);
-
             if (block == null) return -1;
 
             var foundRecord = block.Records.Find(r => r.EqualsByID(recordToDelete));
@@ -120,81 +85,57 @@ namespace ServiceConsole.Classes {
             if (foundRecord == null) return -1;
 
             block.Records.Remove(foundRecord);
-            block.Records.Add(recordToDelete);
             block.ValidCount--;
 
-            if (block.ValidCount == 0) {
-                AddToEmptyList(block);
-
-                // Update links in doubly linked list
-                if (block.PreviousAddress != -1) {
-                    var prevBlock = ReadBlock(block.PreviousAddress);
-
-                    if (prevBlock != null) {
-                        prevBlock.NextAddress = block.NextAddress;
-                        WriteBlock(prevBlock);
-                    }
-                }
-
-                if (block.NextAddress != -1) {
-                    var nextBlock = ReadBlock(block.NextAddress);
-
-                    if (nextBlock != null) {
-                        nextBlock.PreviousAddress = block.PreviousAddress;
-                        WriteBlock(nextBlock);
-                    }
-                }
-
-                if (blockAddress == FirstBlockAddress) FirstBlockAddress = block.NextAddress;
-
-                if (blockAddress == LastBlockAddress) LastBlockAddress = block.PreviousAddress;
-            } else {
-                AddToPartiallyEmptyList(block);
-            }
+            RemoveFromFullBlocks(block);
+            AddToPartiallyFullBlocks(block);
 
             WriteBlock(block);
 
-            return blockAddress;
+            return block.Address;
         }
 
         public int Seek() {
-            int result = 0;
-
-            int currentAddress = this.FirstBlockAddress;
-
-            while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
-
-                if (block == null) break;
-
-                result += this.BlockSize;
-
-                currentAddress = block.NextAddress;
-            }
-
-            return result - this.BlockSize;
+            return this.PartiallyFullBlocks.Count * this.BlockSize + this.FullBlocks.Count * this.BlockSize;
         }
 
         public void PrintFile() {
-            int currentAddress = this.FirstBlockAddress;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            PrintBlocks(this.FirstPartiallyFullBlock);
 
-            while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
-
-                if (block == null) break;
-
-                Console.ForegroundColor = block.Records.Count == this.Factor ? ConsoleColor.Green : ConsoleColor.Red;
-
-                block.PrintData();
-
-                currentAddress = block.NextAddress;
-            }
+            Console.ForegroundColor = ConsoleColor.Green;
+            PrintBlocks(this.FirstFullBlock);
 
             Console.ResetColor();
         }
 
+        private void PrintBlocks(int startAddress) {
+            int currentAddress = startAddress;
+
+            while (currentAddress != -1) {
+                var block = ReadBlock(currentAddress);
+
+                if (block == null) break;
+
+                block.PrintData();
+                currentAddress = block.NextAddress;
+            }
+        }
+
         public void CheckStructure() {
-            int currentAddress = this.FirstBlockAddress;
+            int currentAddress = this.FirstPartiallyFullBlock;
+
+            while (currentAddress != -1) {
+                var block = ReadBlock(currentAddress);
+
+                if (block == null) break;
+
+                Console.WriteLine($"Block: #{block.Address}, Prev: #{block.PreviousAddress}, Next: #{block.NextAddress}");
+
+                currentAddress = block.NextAddress;
+            }
+
+            currentAddress = this.FirstFullBlock;
 
             while (currentAddress != -1) {
                 var block = ReadBlock(currentAddress);
@@ -208,93 +149,115 @@ namespace ServiceConsole.Classes {
         }
 
         private Block<T>? ReadBlock(int address) {
-            using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
-            byte[] buffer = new byte[this.BlockSize];
+            if (!File.Exists(this.FilePath)) return null;
 
-            fileStream.Seek(address, SeekOrigin.Begin);
-            int bytesRead = fileStream.Read(buffer, 0, this.BlockSize);
+            try {
+                using var fileStream = new FileStream(this.FilePath, FileMode.Open, FileAccess.Read);
 
-            if (bytesRead < this.BlockSize) return null;
+                byte[] buffer = new byte[this.BlockSize];
+                fileStream.Seek(address, SeekOrigin.Begin);
 
-            Block<T> block = new();
-            block.FromByteArray(buffer);
+                if (fileStream.Read(buffer, 0, this.BlockSize) != this.BlockSize) return null;
 
-            return block;
+                Block<T> block = new(this.Factor);
+                block.FromByteArray(buffer);
+
+                return block;
+            } catch {
+                return null;
+            }
         }
 
         private void WriteBlock(Block<T> block) {
-            using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
-            byte[] buffer = block.GetByteArray();
+            try {
+                using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
 
-            fileStream.Seek(block.Address, SeekOrigin.Begin);
-            fileStream.Write(buffer, 0, buffer.Length);
+                byte[] buffer = block.GetByteArray();
+                fileStream.Seek(block.Address, SeekOrigin.Begin);
+                fileStream.Write(buffer, 0, buffer.Length);
+            } catch {
+                throw new InvalidDataException();
+            }
         }
 
-        private void AddToPartiallyEmptyList(Block<T> block) {
-            block.NextAddress = this.FirstPartiallyEmptyBlockAddress;
-
-            if (this.FirstPartiallyEmptyBlockAddress != -1) {
-                var nextBlock = ReadBlock(this.FirstPartiallyEmptyBlockAddress);
-
-                if (nextBlock != null) nextBlock.PreviousAddress = block.Address;
+        private void AddToPartiallyFullBlocks(Block<T> block) {
+            if (this.FirstPartiallyFullBlock != -1) {
+                var nextBlock = ReadBlock(this.FirstPartiallyFullBlock);
+                if (nextBlock != null) {
+                    nextBlock.PreviousAddress = block.Address;
+                    WriteBlock(nextBlock);
+                }
             }
 
+            block.NextAddress = this.FirstPartiallyFullBlock;
             block.PreviousAddress = -1;
-            this.FirstPartiallyEmptyBlockAddress = block.Address;
+            this.FirstPartiallyFullBlock = block.Address;
+
+            this.PartiallyFullBlocks.Add(block.Address);
         }
 
-        private void RemoveFromPartiallyEmptyList(Block<T> block) {
+        private void RemoveFromPartiallyFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = ReadBlock(block.PreviousAddress);
-
-                if (prevBlock != null) prevBlock.NextAddress = block.NextAddress;
+                if (prevBlock != null) {
+                    prevBlock.NextAddress = block.NextAddress;
+                    WriteBlock(prevBlock);
+                }
             }
 
             if (block.NextAddress != -1) {
                 var nextBlock = ReadBlock(block.NextAddress);
-
-                if (nextBlock != null) nextBlock.PreviousAddress = block.PreviousAddress;
+                if (nextBlock != null) {
+                    nextBlock.PreviousAddress = block.PreviousAddress;
+                    WriteBlock(nextBlock);
+                }
             }
 
-            if (this.FirstPartiallyEmptyBlockAddress == block.Address) {
-                this.FirstPartiallyEmptyBlockAddress = block.NextAddress;
+            if (this.FirstPartiallyFullBlock == block.Address) {
+                this.FirstPartiallyFullBlock = block.NextAddress;
             }
+
+            this.PartiallyFullBlocks.Remove(block.Address);
         }
 
-        private void AddToEmptyList(Block<T> block) {
-            block.NextAddress = this.FirstEmptyBlockAddress;
-            if (this.FirstEmptyBlockAddress != -1) {
-                var nextBlock = ReadBlock(this.FirstEmptyBlockAddress);
-                if (nextBlock != null) nextBlock.PreviousAddress = block.Address;
+        private void AddToFullBlocks(Block<T> block) {
+            if (this.FirstFullBlock != -1) {
+                var nextBlock = ReadBlock(this.FirstFullBlock);
+                if (nextBlock != null) {
+                    nextBlock.PreviousAddress = block.Address;
+                    WriteBlock(nextBlock);
+                }
             }
 
+            block.NextAddress = this.FirstFullBlock;
             block.PreviousAddress = -1;
-            this.FirstEmptyBlockAddress = block.Address;
+
+            this.FirstFullBlock = block.Address;
+            this.FullBlocks.Add(block.Address);
         }
 
-        private void RemoveFromEmptyList(Block<T> block) {
+        private void RemoveFromFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = ReadBlock(block.PreviousAddress);
-
-                if (prevBlock != null) prevBlock.NextAddress = block.NextAddress;
+                if (prevBlock != null) {
+                    prevBlock.NextAddress = block.NextAddress;
+                    WriteBlock(prevBlock);
+                }
             }
 
             if (block.NextAddress != -1) {
                 var nextBlock = ReadBlock(block.NextAddress);
-
-                if (nextBlock != null) nextBlock.PreviousAddress = block.PreviousAddress;
+                if (nextBlock != null) {
+                    nextBlock.PreviousAddress = block.PreviousAddress;
+                    WriteBlock(nextBlock);
+                }
             }
 
-            if (this.FirstEmptyBlockAddress == block.Address) {
-                this.FirstEmptyBlockAddress = block.NextAddress;
+            if (this.FirstFullBlock == block.Address) {
+                this.FirstFullBlock = block.NextAddress;
             }
-        }
 
-        private int CalculateRecordAddress(Block<T> block, T record) {
-            int blockAddress = block.Address + this.HeaderSize;
-            int recordIndex = block.Records.IndexOf(record);
-
-            return blockAddress + recordIndex * record.GetSize();
+            this.FullBlocks.Remove(block.Address);
         }
     }
 }

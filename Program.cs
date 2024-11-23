@@ -15,8 +15,6 @@ namespace ServiceConsole {
 
             tester.TestDoublyLinkedListStructure();
 
-            tester.TestPrint();
-
             tester.TestSeek();
         }
     }
