@@ -1,22 +1,20 @@
-﻿using System.Net;
-
-namespace ServiceConsole.Classes {
+﻿namespace ServiceConsole.Classes {
     public class HeapFile<T> where T : IRecord<T>, IByteData, new() {
         private readonly int Factor;
         private readonly string FilePath;
         private readonly int BlockSize;
+        private readonly Dictionary<int, Block<T>> blockCache;
 
         public int FirstPartiallyFullBlock { get; set; } = -1;
         public int FirstFullBlock { get; set; } = -1;
         public List<int> PartiallyFullBlocks { get; set; } = [];
         public List<int> FullBlocks { get; set; } = [];
 
-        private Dictionary<int, Block<T>> blockCache = [];
-
         public HeapFile(int factor, string filePath) {
             this.Factor = factor;
             this.FilePath = filePath;
             this.BlockSize = new Block<T>(this.Factor).GetSize();
+            this.blockCache = [];
         }
 
         public int InsertRecord(IByteData recordData) {
