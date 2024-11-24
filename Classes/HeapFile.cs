@@ -24,7 +24,7 @@
 
             // Prioritize partially full blocks
             if (this.FirstPartiallyFullBlock != -1) {
-                var foundBlock = this.BlockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? block) ? block : ReadBlock(this.FirstPartiallyFullBlock);
+                var foundBlock = this.BlockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? b) ? b : ReadBlock(this.FirstPartiallyFullBlock);
 
                 if (foundBlock != null) {
                     foundBlock.Records.Add(record);
@@ -59,7 +59,7 @@
             int currentAddress = blockAddress;
 
             while (currentAddress != -1) {
-                var foundBlock = this.BlockCache.TryGetValue(currentAddress, out Block<T>? block) ? block : ReadBlock(currentAddress);
+                var foundBlock = this.BlockCache.TryGetValue(currentAddress, out Block<T>? b) ? b : ReadBlock(currentAddress);
 
                 if (foundBlock == null) break;
 
@@ -79,8 +79,8 @@
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
-            var foundAddress = this.FindRecord(blockAddress, recordData);
-            var foundBlock = this.BlockCache.TryGetValue(foundAddress, out Block<T>? block) ? block : null;
+            int foundAddress = FindRecord(blockAddress, recordData);
+            var foundBlock = this.BlockCache.TryGetValue(foundAddress, out Block<T>? b) ? b : ReadBlock(foundAddress);
 
             if (foundBlock == null) return -1;
 
@@ -92,16 +92,17 @@
             foundBlock.Records.Add(foundRecord);
             foundBlock.ValidCount--;
 
-            if (foundBlock.ValidCount + 1 == this.Factor) {
+            if (foundBlock.Records.Count + 1 == this.Factor) {
                 RemoveFromFullBlocks(foundBlock);
                 AddToPartiallyFullBlocks(foundBlock);
             }
 
             WriteBlock(foundBlock);
 
-            return foundBlock.Address;
-        }
+            RemoveEmptyBlocksAtEnd();
 
+            return foundAddress;
+        }
         public int Seek() {
             return (this.PartiallyFullBlocks.Count + this.FullBlocks.Count) * this.BlockSize;
         }
@@ -122,7 +123,7 @@
             int currentAddress = startAddress;
 
             while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
+                var block = this.BlockCache.TryGetValue(currentAddress, out Block<T>? b) ? b : ReadBlock(currentAddress);
 
                 if (block == null) break;
 
@@ -136,7 +137,7 @@
             int currentAddress = this.FirstPartiallyFullBlock;
 
             while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
+                var block = this.BlockCache.TryGetValue(currentAddress, out Block<T>? b) ? b : ReadBlock(currentAddress);
 
                 if (block == null) break;
 
@@ -148,7 +149,7 @@
             currentAddress = this.FirstFullBlock;
 
             while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
+                var block = this.BlockCache.TryGetValue(currentAddress, out Block<T>? b) ? b : ReadBlock(currentAddress);
 
                 if (block == null) break;
 
@@ -158,8 +159,8 @@
             }
         }
 
-        private Block<T>? ReadBlock(int address) {
-            if (this.BlockCache.TryGetValue(address, out Block<T>? block)) return block;
+        public Block<T>? ReadBlock(int address) {
+            if (this.BlockCache.TryGetValue(address, out Block<T>? b)) return b;
 
             if (!File.Exists(this.FilePath)) return null;
 
@@ -188,7 +189,7 @@
             }
         }
 
-        private void WriteBlock(Block<T> block) {
+        public void WriteBlock(Block<T> block) {
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
                 byte[] buffer = block.GetByteArray();
@@ -203,7 +204,7 @@
 
         private void AddToPartiallyFullBlocks(Block<T> block) {
             if (this.FirstPartiallyFullBlock != -1) {
-                var nextBlock = ReadBlock(this.FirstPartiallyFullBlock);
+                var nextBlock = this.BlockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? b) ? b : ReadBlock(this.FirstPartiallyFullBlock);
 
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.Address;
@@ -220,7 +221,7 @@
 
         private void RemoveFromPartiallyFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
-                var prevBlock = ReadBlock(block.PreviousAddress);
+                var prevBlock = this.BlockCache.TryGetValue(block.PreviousAddress, out Block<T>? b) ? b : ReadBlock(block.PreviousAddress);
 
                 if (prevBlock != null) {
                     prevBlock.NextAddress = block.NextAddress;
@@ -229,7 +230,7 @@
             }
 
             if (block.NextAddress != -1) {
-                var nextBlock = ReadBlock(block.NextAddress);
+                var nextBlock = this.BlockCache.TryGetValue(block.NextAddress, out Block<T>? b) ? b : ReadBlock(block.NextAddress);
 
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.PreviousAddress;
@@ -246,7 +247,7 @@
 
         private void AddToFullBlocks(Block<T> block) {
             if (this.FirstFullBlock != -1) {
-                var nextBlock = ReadBlock(this.FirstFullBlock);
+                var nextBlock = this.BlockCache.TryGetValue(this.FirstFullBlock, out Block<T>? b) ? b : ReadBlock(this.FirstFullBlock);
 
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.Address;
@@ -263,7 +264,7 @@
 
         private void RemoveFromFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
-                var prevBlock = ReadBlock(block.PreviousAddress);
+                var prevBlock = this.BlockCache.TryGetValue(block.PreviousAddress, out Block<T>? b) ? b : ReadBlock(block.PreviousAddress);
 
                 if (prevBlock != null) {
                     prevBlock.NextAddress = block.NextAddress;
@@ -272,7 +273,7 @@
             }
 
             if (block.NextAddress != -1) {
-                var nextBlock = ReadBlock(block.NextAddress);
+                var nextBlock = this.BlockCache.TryGetValue(block.NextAddress, out Block<T>? b) ? b : ReadBlock(block.NextAddress);
 
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.PreviousAddress;
@@ -285,6 +286,33 @@
             }
 
             this.FullBlocks.Remove(block.Address);
+        }
+
+        private void RemoveEmptyBlocksAtEnd() {
+            int currentAddress = this.FirstPartiallyFullBlock;
+
+            while (currentAddress != -1) {
+                var block = this.BlockCache.TryGetValue(currentAddress, out Block<T>? b) ? b : ReadBlock(currentAddress);
+
+                if (block != null && block.ValidCount == 0) {
+                    this.BlockCache.Remove(currentAddress);
+
+                    RemoveFromPartiallyFullBlocks(block);
+
+                    ShrinkFile(currentAddress);
+                }
+
+                currentAddress = block?.NextAddress ?? -1;
+            }
+        }
+
+        private void ShrinkFile(int lastBlockAddress) {
+            try {
+                using var fileStream = new FileStream(this.FilePath, FileMode.Open, FileAccess.Write);
+                fileStream.SetLength(lastBlockAddress);
+            } catch (IOException ex) {
+                Console.WriteLine($"Error while shrinking file: {ex.Message}");
+            }
         }
     }
 }

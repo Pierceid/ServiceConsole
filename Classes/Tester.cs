@@ -80,14 +80,6 @@
 
                 if (deletedAddress != -1) {
                     Console.WriteLine($"Record deleted from address: [#{deletedAddress}]");
-
-                    customers.Remove(customerToDelete);
-                    customerIDs.Remove(customerToDelete.Id);
-
-                    foreach (var service in customerToDelete.Services) {
-                        services.Remove(service);
-                        serviceIDs.Remove(service.Id);
-                    }
                 } else {
                     throw new NullReferenceException("Failed to delete record.");
                 }
@@ -117,8 +109,20 @@
             
             int count = 0;
 
-            foreach (var c in customers) {
-                count += c.Services.Count;
+            foreach (var blockAddress in this.heapFile.PartiallyFullBlocks) {
+                var block = heapFile.ReadBlock(blockAddress);
+
+                if (block == null) continue;
+
+                count += block.ValidCount;
+            }
+
+            foreach (var blockAddress in this.heapFile.FullBlocks) {
+                var block = heapFile.ReadBlock(blockAddress);
+
+                if (block == null) continue;
+
+                count += block.ValidCount;
             }
 
             Console.WriteLine($"{message}: {count}");

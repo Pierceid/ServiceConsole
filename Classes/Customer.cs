@@ -107,7 +107,7 @@ namespace ServiceConsole.Classes {
             string result = $"Customer - {this.Name.TrimEnd()} {this.Surname.TrimEnd()} (ECV: {this.ECV.TrimEnd()}):";
 
             foreach (var service in this.Services) {
-                result += $"\n{service.GetInfo()}";
+                result += $"\n    {service.GetInfo()}";
             }
 
             return result;

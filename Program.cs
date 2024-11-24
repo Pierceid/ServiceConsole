@@ -5,15 +5,15 @@ namespace ServiceConsole {
         static void Main(string[] args) {
             Tester tester = new();
 
-            tester.TestInsert(100);
+            tester.TestInsert(3000);
 
             tester.TestPrint();
 
-            tester.TestFind(100);
+            tester.TestFind(3000);
 
             tester.CheckRecordCount("Before");
 
-            tester.TestDelete(100);
+            tester.TestDelete(3000);
 
             tester.CheckRecordCount("After");
 
