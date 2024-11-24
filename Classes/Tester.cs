@@ -111,5 +111,17 @@
 
             Console.WriteLine($"Seek: {this.heapFile.Seek()}");
         }
+
+        public void CheckRecordCount(string message) {
+            Console.WriteLine("------------------------------------------------------------------------------------");
+            
+            int count = 0;
+
+            foreach (var c in customers) {
+                count += c.Services.Count;
+            }
+
+            Console.WriteLine($"{message}: {count}");
+        }
     }
 }

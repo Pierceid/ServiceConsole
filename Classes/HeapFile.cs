@@ -37,6 +37,7 @@
                     }
 
                     WriteBlock(foundBlock);
+
                     return foundBlock.Address;
                 }
             }
@@ -51,11 +52,11 @@
 
             return newBlock.Address;
         }
-        public int FindRecord(int address, IByteData recordData) {
+        public int FindRecord(int blockAddress, IByteData recordData) {
             T recordToFind = new();
             recordToFind.FromByteArray(recordData.GetByteArray());
 
-            int currentAddress = address;
+            int currentAddress = blockAddress;
 
             while (currentAddress != -1) {
                 var foundBlock = this.BlockCache.TryGetValue(currentAddress, out Block<T>? block) ? block : ReadBlock(currentAddress);
@@ -78,23 +79,27 @@
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
-            var block = ReadBlock(blockAddress);
+            var foundAddress = this.FindRecord(blockAddress, recordData);
+            var foundBlock = this.BlockCache.TryGetValue(foundAddress, out Block<T>? block) ? block : null;
 
-            if (block == null) return -1;
+            if (foundBlock == null) return -1;
 
-            var foundRecord = block.Records.Find(r => r.EqualsByID(recordToDelete));
+            var foundRecord = foundBlock.Records.Find(r => r.EqualsByID(recordToDelete));
 
             if (foundRecord == null) return -1;
 
-            block.Records.Remove(foundRecord);
-            block.ValidCount--;
+            foundBlock.Records.Remove(foundRecord);
+            foundBlock.Records.Add(foundRecord);
+            foundBlock.ValidCount--;
 
-            RemoveFromFullBlocks(block);
-            AddToPartiallyFullBlocks(block);
+            if (foundBlock.ValidCount + 1 == this.Factor) {
+                RemoveFromFullBlocks(foundBlock);
+                AddToPartiallyFullBlocks(foundBlock);
+            }
 
-            WriteBlock(block);
+            WriteBlock(foundBlock);
 
-            return block.Address;
+            return foundBlock.Address;
         }
 
         public int Seek() {
