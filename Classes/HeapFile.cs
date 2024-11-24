@@ -1,4 +1,6 @@
-﻿namespace ServiceConsole.Classes {
+﻿using System.Net;
+
+namespace ServiceConsole.Classes {
     public class HeapFile<T> where T : IRecord<T>, IByteData, new() {
         private readonly int Factor;
         private readonly string FilePath;
@@ -6,8 +8,10 @@
 
         public int FirstPartiallyFullBlock { get; set; } = -1;
         public int FirstFullBlock { get; set; } = -1;
-        public List<int> PartiallyFullBlocks { get; set; } = new();
-        public List<int> FullBlocks { get; set; } = new();
+        public List<int> PartiallyFullBlocks { get; set; } = [];
+        public List<int> FullBlocks { get; set; } = [];
+
+        private Dictionary<int, Block<T>> blockCache = [];
 
         public HeapFile(int factor, string filePath) {
             this.Factor = factor;
@@ -20,23 +24,22 @@
             record.FromByteArray(recordData.GetByteArray());
 
             // Prioritize partially full blocks
-            if (this.PartiallyFullBlocks.Count > 0) {
-                var blockAddress = this.PartiallyFullBlocks[0];
-                var block = ReadBlock(blockAddress);
+            if (this.FirstPartiallyFullBlock != -1) {
+                var foundBlock = this.blockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? block) ? block : ReadBlock(this.FirstPartiallyFullBlock);
 
-                if (block != null) {
-                    block.Records.Add(record);
-                    block.ValidCount++;
+                if (foundBlock != null) {
+                    foundBlock.Records.Add(record);
+                    foundBlock.ValidCount++;
 
                     // If the block is now full, move it to the full blocks list
-                    if (block.ValidCount == this.Factor) {
-                        RemoveFromPartiallyFullBlocks(block);
-                        AddToFullBlocks(block);
+                    if (foundBlock.ValidCount == this.Factor) {
+                        RemoveFromPartiallyFullBlocks(foundBlock);
+                        AddToFullBlocks(foundBlock);
                     }
 
-                    WriteBlock(block);
+                    WriteBlock(foundBlock);
 
-                    return block.Address;
+                    return foundBlock.Address;
                 }
             }
 
@@ -51,24 +54,24 @@
             return newBlock.Address;
         }
 
-        public int FindRecord(int blockAddress, IByteData recordData) {
+        public int FindRecord(int address, IByteData recordData) {
             T recordToFind = new();
             recordToFind.FromByteArray(recordData.GetByteArray());
 
-            int currentAddress = blockAddress;
+            int currentAddress = address;
 
             while (currentAddress != -1) {
-                var block = ReadBlock(currentAddress);
+                var foundBlock = this.blockCache.TryGetValue(currentAddress, out Block<T>? block) ? block : ReadBlock(currentAddress);
 
-                if (block == null) break;
+                if (foundBlock == null) break;
 
-                foreach (var record in block.Records) {
+                foreach (var record in foundBlock.Records) {
                     if (record.EqualsByID(recordToFind)) {
                         return currentAddress;
                     }
                 }
 
-                currentAddress = block.NextAddress;
+                currentAddress = foundBlock.NextAddress;
             }
 
             return -1;
@@ -79,6 +82,7 @@
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
             var block = ReadBlock(blockAddress);
+
             if (block == null) return -1;
 
             var foundRecord = block.Records.Find(r => r.EqualsByID(recordToDelete));
@@ -97,7 +101,7 @@
         }
 
         public int Seek() {
-            return this.PartiallyFullBlocks.Count * this.BlockSize + this.FullBlocks.Count * this.BlockSize;
+            return (this.PartiallyFullBlocks.Count + this.FullBlocks.Count) * this.BlockSize;
         }
 
         public void PrintFile() {
@@ -121,6 +125,7 @@
                 if (block == null) break;
 
                 block.PrintData();
+
                 currentAddress = block.NextAddress;
             }
         }
@@ -152,7 +157,10 @@
         }
 
         private Block<T>? ReadBlock(int address) {
+            // Check if the block is already in the cache
             if (!File.Exists(this.FilePath)) return null;
+
+            if (this.blockCache.TryGetValue(address, out Block<T>? block)) return block;
 
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.Open, FileAccess.Read);
@@ -162,10 +170,13 @@
 
                 if (fileStream.Read(buffer, 0, this.BlockSize) != this.BlockSize) return null;
 
-                Block<T> block = new(this.Factor);
-                block.FromByteArray(buffer);
+                Block<T> foundBlock = new(this.Factor);
+                foundBlock.FromByteArray(buffer);
 
-                return block;
+                // Cache the block after reading it
+                this.blockCache[address] = foundBlock;
+
+                return foundBlock;
             } catch {
                 return null;
             }
@@ -178,6 +189,9 @@
                 byte[] buffer = block.GetByteArray();
                 fileStream.Seek(block.Address, SeekOrigin.Begin);
                 fileStream.Write(buffer, 0, buffer.Length);
+
+                // After writing, update the cache
+                this.blockCache[block.Address] = block;
             } catch {
                 throw new InvalidDataException();
             }
@@ -186,6 +200,7 @@
         private void AddToPartiallyFullBlocks(Block<T> block) {
             if (this.FirstPartiallyFullBlock != -1) {
                 var nextBlock = ReadBlock(this.FirstPartiallyFullBlock);
+
                 if (nextBlock != null) {
                     nextBlock.PreviousAddress = block.Address;
                     WriteBlock(nextBlock);
