@@ -3,7 +3,8 @@
         private readonly int Factor;
         private readonly string FilePath;
         private readonly int BlockSize;
-        private readonly Dictionary<int, Block<T>> blockCache;
+        private readonly int CacheLimit = 100;
+        private readonly Dictionary<int, Block<T>> BlockCache;
 
         public int FirstPartiallyFullBlock { get; set; } = -1;
         public int FirstFullBlock { get; set; } = -1;
@@ -14,7 +15,7 @@
             this.Factor = factor;
             this.FilePath = filePath;
             this.BlockSize = new Block<T>(this.Factor).GetSize();
-            this.blockCache = [];
+            this.BlockCache = [];
         }
 
         public int InsertRecord(IByteData recordData) {
@@ -23,7 +24,7 @@
 
             // Prioritize partially full blocks
             if (this.FirstPartiallyFullBlock != -1) {
-                var foundBlock = this.blockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? block) ? block : ReadBlock(this.FirstPartiallyFullBlock);
+                var foundBlock = this.BlockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? block) ? block : ReadBlock(this.FirstPartiallyFullBlock);
 
                 if (foundBlock != null) {
                     foundBlock.Records.Add(record);
@@ -36,7 +37,6 @@
                     }
 
                     WriteBlock(foundBlock);
-
                     return foundBlock.Address;
                 }
             }
@@ -51,7 +51,6 @@
 
             return newBlock.Address;
         }
-
         public int FindRecord(int address, IByteData recordData) {
             T recordToFind = new();
             recordToFind.FromByteArray(recordData.GetByteArray());
@@ -59,7 +58,7 @@
             int currentAddress = address;
 
             while (currentAddress != -1) {
-                var foundBlock = this.blockCache.TryGetValue(currentAddress, out Block<T>? block) ? block : ReadBlock(currentAddress);
+                var foundBlock = this.BlockCache.TryGetValue(currentAddress, out Block<T>? block) ? block : ReadBlock(currentAddress);
 
                 if (foundBlock == null) break;
 
@@ -155,14 +154,12 @@
         }
 
         private Block<T>? ReadBlock(int address) {
-            // Check if the block is already in the cache
-            if (!File.Exists(this.FilePath)) return null;
+            if (this.BlockCache.TryGetValue(address, out Block<T>? block)) return block;
 
-            if (this.blockCache.TryGetValue(address, out Block<T>? block)) return block;
+            if (!File.Exists(this.FilePath)) return null;
 
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.Open, FileAccess.Read);
-
                 byte[] buffer = new byte[this.BlockSize];
                 fileStream.Seek(address, SeekOrigin.Begin);
 
@@ -172,7 +169,13 @@
                 foundBlock.FromByteArray(buffer);
 
                 // Cache the block after reading it
-                this.blockCache[address] = foundBlock;
+                if (this.BlockCache.Count >= this.CacheLimit) {
+                    // Remove the oldest block from the cache
+                    var firstKey = this.BlockCache.Keys.First();
+                    this.BlockCache.Remove(firstKey);
+                }
+
+                this.BlockCache[address] = foundBlock;
 
                 return foundBlock;
             } catch {
@@ -183,13 +186,11 @@
         private void WriteBlock(Block<T> block) {
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
-
                 byte[] buffer = block.GetByteArray();
                 fileStream.Seek(block.Address, SeekOrigin.Begin);
                 fileStream.Write(buffer, 0, buffer.Length);
 
-                // After writing, update the cache
-                this.blockCache[block.Address] = block;
+                this.BlockCache[block.Address] = block;
             } catch {
                 throw new InvalidDataException();
             }
