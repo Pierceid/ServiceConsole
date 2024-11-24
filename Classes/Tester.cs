@@ -6,9 +6,10 @@
         private readonly List<CarService> services;
         private readonly List<int> customerIDs;
         private readonly List<int> serviceIDs;
+        private readonly string filePath = Path.GetFullPath(Path.Combine("..", "..", "..", "Resources", "heap-file.bin"));
 
         public Tester() {
-            this.heapFile = new HeapFile<Customer>(8, Path.GetFullPath(Path.Combine("..", "..", "..", "Resources", "heap-file.bin")));
+            this.heapFile = new HeapFile<Customer>(8, 100, this.filePath);
             this.random = new Random();
             this.customers = [];
             this.services = [];

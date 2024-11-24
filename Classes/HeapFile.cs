@@ -3,7 +3,7 @@
         private readonly int Factor;
         private readonly string FilePath;
         private readonly int BlockSize;
-        private readonly int CacheLimit = 100;
+        private readonly int CacheLimit;
         private readonly Dictionary<int, Block<T>> BlockCache;
 
         public int FirstPartiallyFullBlock { get; set; } = -1;
@@ -11,10 +11,11 @@
         public List<int> PartiallyFullBlocks { get; set; } = [];
         public List<int> FullBlocks { get; set; } = [];
 
-        public HeapFile(int factor, string filePath) {
+        public HeapFile(int factor, int cacheLimit, string filePath) {
             this.Factor = factor;
             this.FilePath = filePath;
             this.BlockSize = new Block<T>(this.Factor).GetSize();
+            this.CacheLimit = cacheLimit;
             this.BlockCache = [];
         }
 
