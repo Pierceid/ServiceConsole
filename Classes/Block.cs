@@ -5,6 +5,7 @@
         public int NextAddress { get; set; }
         public int ValidCount { get; set; }
         public int Factor { get; set; }
+        public int LocalDepth { get; set; }
         public List<T> Records { get; set; }
 
         public Block(int factor) {
@@ -15,10 +16,11 @@
             this.NextAddress = -1;
             this.ValidCount = 0;
             this.Factor = factor;
+            this.LocalDepth = 1;
             this.Records = [];
         }
 
-        public Block(int address, int previousBlock, int nextBlock, int validCount, int factor) {
+        public Block(int address, int previousBlock, int nextBlock, int validCount, int factor, int localDepth) {
             if (factor <= 0) throw new ArgumentException("Factor must be greater than 0.");
 
             if (validCount < 0 || validCount > factor) throw new ArgumentException($"ValidCount must be between 0 and Factor ({factor}).");
@@ -28,6 +30,7 @@
             this.NextAddress = nextBlock;
             this.ValidCount = validCount;
             this.Factor = factor;
+            this.LocalDepth = localDepth;
             this.Records = [];
         }
 
@@ -48,6 +51,9 @@
 
             // Serialize Factor (4 bytes)
             data.AddRange(BitConverter.GetBytes(this.Factor));
+
+            // Serialize LocalDepth (4 bytes)
+            data.AddRange(BitConverter.GetBytes(this.LocalDepth));
 
             // Serialize Records
             foreach (var record in this.Records) {
@@ -72,7 +78,7 @@
         }
 
         public void FromByteArray(byte[] data) {
-            if (data.Length < 20) throw new ArgumentException("Byte array too small to represent a block.");
+            if (data.Length < 24) throw new ArgumentException("Byte array too small to represent a block.");
 
             // Deserialize Address (4 bytes)
             this.Address = BitConverter.ToInt32(data, 0);
@@ -88,6 +94,9 @@
 
             // Deserialize Factor (4 bytes)
             this.Factor = BitConverter.ToInt32(data, 16);
+
+            // Deserialize LocalDepth (4 bytes)
+            this.LocalDepth = BitConverter.ToInt32(data, 20);
 
             if (this.ValidCount < 0 || this.ValidCount > this.Factor) throw new ArgumentException("ValidCount out of range.");
 
@@ -114,8 +123,8 @@
         }
 
         public int GetSize() {
-            // Address (4) + PreviousAddress (4) + NextAddress (4) + ValidCount (4) + Factor (4) + Factor * RecordSize
-            return 20 + this.Factor * Activator.CreateInstance<T>().GetSize();
+            // Address (4) + PreviousAddress (4) + NextAddress (4) + ValidCount (4) + Factor (4) + LocalDepth (4) + Factor * RecordSize
+            return 24 + this.Factor * Activator.CreateInstance<T>().GetSize();
         }
 
         public void PrintData() {

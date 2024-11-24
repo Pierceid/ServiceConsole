@@ -1,11 +1,10 @@
 ﻿namespace ServiceConsole.Classes {
-    public class HeapFile<T> where T : IRecord<T>, IByteData, new() {
-        private readonly int Factor;
-        private readonly string FilePath;
-        private readonly int BlockSize;
-        private readonly int CacheLimit;
-        private readonly Dictionary<int, Block<T>> BlockCache;
-
+    public class HeapFile<T> where T : IRecord<T>, new() {
+        public int Factor { get; set; }
+        public string FilePath { get; set; }
+        public int BlockSize { get; set; }
+        public int CacheLimit { get; set; }
+        public Dictionary<int, Block<T>> BlockCache { get; set; } = [];
         public int FirstPartiallyFullBlock { get; set; } = -1;
         public int FirstFullBlock { get; set; } = -1;
         public List<int> PartiallyFullBlocks { get; set; } = [];
@@ -16,10 +15,9 @@
             this.FilePath = filePath;
             this.BlockSize = new Block<T>(this.Factor).GetSize();
             this.CacheLimit = cacheLimit;
-            this.BlockCache = [];
         }
 
-        public int InsertRecord(IByteData recordData) {
+        public virtual int InsertRecord(IByteData recordData) {
             T record = new();
             record.FromByteArray(recordData.GetByteArray());
 
@@ -45,7 +43,7 @@
 
             // If no partially full block exists, create a new block
             int newBlockAddress = Seek();
-            Block<T> newBlock = new(newBlockAddress, -1, this.FirstPartiallyFullBlock, 1, this.Factor);
+            Block<T> newBlock = new(newBlockAddress, -1, this.FirstPartiallyFullBlock, 1, this.Factor, 1);
             newBlock.Records.Add(record);
 
             AddToPartiallyFullBlocks(newBlock);
@@ -53,7 +51,8 @@
 
             return newBlock.Address;
         }
-        public int FindRecord(int blockAddress, IByteData recordData) {
+
+        public virtual int FindRecord(int blockAddress, IByteData recordData) {
             T recordToFind = new();
             recordToFind.FromByteArray(recordData.GetByteArray());
 
@@ -76,7 +75,7 @@
             return -1;
         }
 
-        public int DeleteRecord(int blockAddress, IByteData recordData) {
+        public virtual int DeleteRecord(int blockAddress, IByteData recordData) {
             T recordToDelete = new();
             recordToDelete.FromByteArray(recordData.GetByteArray());
 
@@ -104,11 +103,12 @@
 
             return foundAddress;
         }
-        public int Seek() {
+
+        public virtual int Seek() {
             return (this.PartiallyFullBlocks.Count + this.FullBlocks.Count) * this.BlockSize;
         }
 
-        public void PrintFile() {
+        public virtual void PrintFile() {
             Console.ForegroundColor = ConsoleColor.Yellow;
 
             PrintBlocks(this.FirstPartiallyFullBlock);
@@ -120,7 +120,7 @@
             Console.ResetColor();
         }
 
-        private void PrintBlocks(int startAddress) {
+        public virtual void PrintBlocks(int startAddress) {
             int currentAddress = startAddress;
 
             while (currentAddress != -1) {
@@ -134,7 +134,7 @@
             }
         }
 
-        public void CheckStructure() {
+        public virtual void CheckStructure() {
             int currentAddress = this.FirstPartiallyFullBlock;
 
             while (currentAddress != -1) {
@@ -160,7 +160,7 @@
             }
         }
 
-        public Block<T>? ReadBlock(int address) {
+        public virtual Block<T>? ReadBlock(int address) {
             if (this.BlockCache.TryGetValue(address, out Block<T>? b)) return b;
 
             if (!File.Exists(this.FilePath)) return null;
@@ -190,7 +190,7 @@
             }
         }
 
-        public void WriteBlock(Block<T> block) {
+        public virtual void WriteBlock(Block<T> block) {
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
                 byte[] buffer = block.GetByteArray();
@@ -203,7 +203,7 @@
             }
         }
 
-        private void AddToPartiallyFullBlocks(Block<T> block) {
+        public virtual void AddToPartiallyFullBlocks(Block<T> block) {
             if (this.FirstPartiallyFullBlock != -1) {
                 var nextBlock = this.BlockCache.TryGetValue(this.FirstPartiallyFullBlock, out Block<T>? b) ? b : ReadBlock(this.FirstPartiallyFullBlock);
 
@@ -220,7 +220,7 @@
             this.PartiallyFullBlocks.Add(block.Address);
         }
 
-        private void RemoveFromPartiallyFullBlocks(Block<T> block) {
+        public virtual void RemoveFromPartiallyFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = this.BlockCache.TryGetValue(block.PreviousAddress, out Block<T>? b) ? b : ReadBlock(block.PreviousAddress);
 
@@ -246,7 +246,7 @@
             this.PartiallyFullBlocks.Remove(block.Address);
         }
 
-        private void AddToFullBlocks(Block<T> block) {
+        public virtual void AddToFullBlocks(Block<T> block) {
             if (this.FirstFullBlock != -1) {
                 var nextBlock = this.BlockCache.TryGetValue(this.FirstFullBlock, out Block<T>? b) ? b : ReadBlock(this.FirstFullBlock);
 
@@ -263,7 +263,7 @@
             this.FullBlocks.Add(block.Address);
         }
 
-        private void RemoveFromFullBlocks(Block<T> block) {
+        public virtual void RemoveFromFullBlocks(Block<T> block) {
             if (block.PreviousAddress != -1) {
                 var prevBlock = this.BlockCache.TryGetValue(block.PreviousAddress, out Block<T>? b) ? b : ReadBlock(block.PreviousAddress);
 
@@ -289,7 +289,7 @@
             this.FullBlocks.Remove(block.Address);
         }
 
-        private void RemoveEmptyBlocksAtEnd() {
+        public virtual void RemoveEmptyBlocksAtEnd() {
             int currentAddress = this.FirstPartiallyFullBlock;
 
             while (currentAddress != -1) {
@@ -307,7 +307,7 @@
             }
         }
 
-        private void ShrinkFile(int lastBlockAddress) {
+        public virtual void ShrinkFile(int lastBlockAddress) {
             try {
                 using var fileStream = new FileStream(this.FilePath, FileMode.Open, FileAccess.Write);
                 fileStream.SetLength(lastBlockAddress);
